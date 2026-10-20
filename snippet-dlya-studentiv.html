@@ -1,0 +1,102 @@
+<meta charset="UTF-8"> <!-- GitHub Pages: цей рядок не потрібен (він уже є у <head>). Google Sites: копіюйте ВЕСЬ файл разом із ним -->
+<!--
+=====================================================================
+  УНІВЕРСАЛЬНИЙ СНІПЕТ ДЛЯ ВЛАСНОГО ЛЕНДИНГУ СТУДЕНТА
+  Що робить: збирає ім'я, email і ОБРАНІ ПОЗИЦІЇ з форми
+  та надсилає їх JSON-ом на вебхук Make (масив items → для Iterator).
+
+  СПОЧАТКУ: вставте свій URL вебхука в константу WEBHOOK_URL (нижче).
+
+  GITHUB PAGES (ви редагуєте index.html у репозиторії):
+  1) Блок <form>…</form> — у потрібне місце сторінки
+     (або додайте своїй формі id="orderForm", поля name/email
+     і чекбокси з класом .order-item — як у прикладі).
+  2) Блок <script>…</script> — перед закриваючим тегом </body>.
+  3) Commit → зачекайте 1–2 хв → оновіть сайт через Ctrl+F5.
+
+  GOOGLE SITES (HTML сторінки редагувати не можна, лише вбудовувати):
+  1) Вставити → Вбудувати (Embed) → вкладка «Вбудувати код».
+  2) Вставте ВЕСЬ цей файл ОДНИМ блоком (форма і скрипт мають бути разом).
+  3) Далі → Вставити → розтягніть блок, щоб форму було видно повністю
+     → Опублікувати.
+=====================================================================
+-->
+
+<!-- ======== 1. ФОРМА (адаптуйте товари/послуги під свій лендинг) ======== -->
+<form id="orderForm">
+  <h3>Оберіть позиції</h3>
+
+  <!-- Кожна позиція: чекбокс .order-item + data-name + data-price + поле кількості .order-qty -->
+  <label>
+    <input type="checkbox" class="order-item" data-sku="P1" data-name="Товар / послуга 1" data-price="500">
+    Товар / послуга 1 — 500 грн
+    <input type="number" class="order-qty" value="1" min="1" style="width:60px">
+  </label><br>
+
+  <label>
+    <input type="checkbox" class="order-item" data-sku="P2" data-name="Товар / послуга 2" data-price="750">
+    Товар / послуга 2 — 750 грн
+    <input type="number" class="order-qty" value="1" min="1" style="width:60px">
+  </label><br>
+
+  <label>
+    <input type="checkbox" class="order-item" data-sku="P3" data-name="Товар / послуга 3" data-price="1200">
+    Товар / послуга 3 — 1200 грн
+    <input type="number" class="order-qty" value="1" min="1" style="width:60px">
+  </label><br><br>
+
+  <input name="name"  placeholder="Ваше ім'я" required><br>
+  <input name="email" type="email" placeholder="Email" required><br>
+  <input name="phone" placeholder="Телефон"><br>
+  <textarea name="comment" placeholder="Коментар"></textarea><br>
+
+  <button type="submit">Замовити</button>
+  <p id="orderMsg"></p>
+</form>
+
+<!-- ======== 2. СКРИПТ (вставити перед </body>) ======== -->
+<script>
+  // 3) ВСТАВТЕ СВІЙ URL ВЕБХУКА З MAKE:
+  const WEBHOOK_URL = "PASTE_YOUR_MAKE_WEBHOOK_URL_HERE";
+
+  document.getElementById("orderForm").addEventListener("submit", async function (e) {
+    e.preventDefault();                     // не перезавантажувати сторінку
+    const form = e.target;
+    const msg  = document.getElementById("orderMsg");
+
+    // Збираємо обрані позиції в МАСИВ — саме його розбере Iterator у Make
+    const items = [...form.querySelectorAll(".order-item:checked")].map(cb => {
+      const qtyInput = cb.parentElement.querySelector(".order-qty");
+      const qty   = qtyInput ? Number(qtyInput.value) || 1 : 1;
+      const price = Number(cb.dataset.price);
+      return { sku: cb.dataset.sku, name: cb.dataset.name, qty: qty, price: price, subtotal: qty * price };
+    });
+
+    if (!items.length) { msg.textContent = "Оберіть хоча б одну позицію"; return; }
+
+    const order = {
+      order_id: "ORD-" + Date.now().toString().slice(-6),
+      created_at: new Date().toISOString(),
+      customer: { name: form.name.value, email: form.email.value, phone: form.phone.value },
+      comment: form.comment.value,
+      items: items,
+      items_count: items.length,
+      total: items.reduce((s, i) => s + i.subtotal, 0),
+      currency: "UAH"
+    };
+
+    try {
+      const res = await fetch(WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(order)
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      msg.textContent = "Дякуємо! Підтвердження надіслано на " + order.customer.email;
+      form.reset();
+    } catch (err) {
+      msg.textContent = "Помилка відправки: " + err.message;
+      console.error(err);
+    }
+  });
+</script>
