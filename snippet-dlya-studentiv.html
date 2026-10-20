@@ -1,102 +1,165 @@
-<meta charset="UTF-8"> <!-- GitHub Pages: цей рядок не потрібен (він уже є у <head>). Google Sites: копіюйте ВЕСЬ файл разом із ним -->
+<meta charset="UTF-8">
 <!--
 =====================================================================
-  УНІВЕРСАЛЬНИЙ СНІПЕТ ДЛЯ ВЛАСНОГО ЛЕНДИНГУ СТУДЕНТА
-  Що робить: збирає ім'я, email і ОБРАНІ ПОЗИЦІЇ з форми
-  та надсилає їх JSON-ом на вебхук Make (масив items → для Iterator).
+  СНІПЕТ «ЛЕНДИНГ → MAKE» ДЛЯ БУДЬ-ЯКОГО HTML-ЛЕНДИНГУ
 
-  СПОЧАТКУ: вставте свій URL вебхука в константу WEBHOOK_URL (нижче).
+  Що копіювати — залежить від вашого лендингу:
 
-  GITHUB PAGES (ви редагуєте index.html у репозиторії):
-  1) Блок <form>…</form> — у потрібне місце сторінки
-     (або додайте своїй формі id="orderForm", поля name/email
-     і чекбокси з класом .order-item — як у прикладі).
-  2) Блок <script>…</script> — перед закриваючим тегом </body>.
-  3) Commit → зачекайте 1–2 хв → оновіть сайт через Ctrl+F5.
+  ┌─────────────────────────────────────────┬─────────────────────────────┐
+  │ GitHub Pages, у лендингу ВЖЕ Є <form>   │ БЛОК 1 + БЛОК 2             │
+  │ GitHub Pages, форми НЕМАЄ               │ БЛОК 1 + БЛОК 3             │
+  │ Google Sites (форми немає і бути не може│ БЛОК 3, а під ним БЛОК 1 —  │
+  │ — вставляємо через «Вбудувати код»)     │ разом, в ОДИН Embed-блок    │
+  └─────────────────────────────────────────┴─────────────────────────────┘
 
-  GOOGLE SITES (HTML сторінки редагувати не можна, лише вбудовувати):
-  1) Вставити → Вбудувати (Embed) → вкладка «Вбудувати код».
-  2) Вставте ВЕСЬ цей файл ОДНИМ блоком (форма і скрипт мають бути разом).
-  3) Далі → Вставити → розтягніть блок, щоб форму було видно повністю
-     → Опублікувати.
+  У БЛОЦІ 1 замініть ВСТАВТЕ_СЮДИ_URL_ВЕБХУКА на URL з Make.
+  Більше нічого в коді скрипта міняти не треба.
 =====================================================================
 -->
 
-<!-- ======== 1. ФОРМА (адаптуйте товари/послуги під свій лендинг) ======== -->
-<form id="orderForm">
-  <h3>Оберіть позиції</h3>
 
-  <!-- Кожна позиція: чекбокс .order-item + data-name + data-price + поле кількості .order-qty -->
-  <label>
-    <input type="checkbox" class="order-item" data-sku="P1" data-name="Товар / послуга 1" data-price="500">
-    Товар / послуга 1 — 500 грн
-    <input type="number" class="order-qty" value="1" min="1" style="width:60px">
-  </label><br>
-
-  <label>
-    <input type="checkbox" class="order-item" data-sku="P2" data-name="Товар / послуга 2" data-price="750">
-    Товар / послуга 2 — 750 грн
-    <input type="number" class="order-qty" value="1" min="1" style="width:60px">
-  </label><br>
-
-  <label>
-    <input type="checkbox" class="order-item" data-sku="P3" data-name="Товар / послуга 3" data-price="1200">
-    Товар / послуга 3 — 1200 грн
-    <input type="number" class="order-qty" value="1" min="1" style="width:60px">
-  </label><br><br>
-
-  <input name="name"  placeholder="Ваше ім'я" required><br>
-  <input name="email" type="email" placeholder="Email" required><br>
-  <input name="phone" placeholder="Телефон"><br>
-  <textarea name="comment" placeholder="Коментар"></textarea><br>
-
-  <button type="submit">Замовити</button>
-  <p id="orderMsg"></p>
-</form>
-
-<!-- ======== 2. СКРИПТ (вставити перед </body>) ======== -->
+<!-- ================================================================
+     БЛОК 1. СКРИПТ ВІДПРАВКИ В MAKE  (потрібен ЗАВЖДИ)
+     КУДИ: у самий кінець сторінки, ПЕРЕД закриваючим тегом </body>.
+     ЩО ЗМІНИТИ: лише WEBHOOK_URL.
+     Скрипт сам знаходить форму на сторінці та поля ім'я / email /
+     телефон (навіть якщо у полів немає атрибута name).
+     ================================================================ -->
 <script>
-  // 3) ВСТАВТЕ СВІЙ URL ВЕБХУКА З MAKE:
-  const WEBHOOK_URL = "PASTE_YOUR_MAKE_WEBHOOK_URL_HERE";
+(function () {
+  const WEBHOOK_URL = "ВСТАВТЕ_СЮДИ_URL_ВЕБХУКА";   // ← https://hook.eu2.make.com/...
 
-  document.getElementById("orderForm").addEventListener("submit", async function (e) {
-    e.preventDefault();                     // не перезавантажувати сторінку
-    const form = e.target;
-    const msg  = document.getElementById("orderMsg");
+  function init() {
+    // Форма: та, що з id="orderForm", інакше — перша <form> на сторінці
+    const form = document.getElementById("orderForm") || document.querySelector("form");
+    if (!form) { console.error("Make: на сторінці немає <form>. Вставте БЛОК 3."); return; }
 
-    // Збираємо обрані позиції в МАСИВ — саме його розбере Iterator у Make
-    const items = [...form.querySelectorAll(".order-item:checked")].map(cb => {
-      const qtyInput = cb.parentElement.querySelector(".order-qty");
-      const qty   = qtyInput ? Number(qtyInput.value) || 1 : 1;
-      const price = Number(cb.dataset.price);
-      return { sku: cb.dataset.sku, name: cb.dataset.name, qty: qty, price: price, subtotal: qty * price };
-    });
+    // Повідомлення для користувача (з'явиться під формою)
+    const msg = document.createElement("p");
+    msg.style.cssText = "margin-top:10px;font-weight:600";
+    form.appendChild(msg);
+    const say = (text, ok) => { msg.style.color = ok ? "#2e7d4f" : "#b3261e"; msg.textContent = text; };
 
-    if (!items.length) { msg.textContent = "Оберіть хоча б одну позицію"; return; }
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();                                 // не перезавантажувати сторінку
+      e.stopImmediatePropagation();                       // не запускати інші обробники форми
 
-    const order = {
-      order_id: "ORD-" + Date.now().toString().slice(-6),
-      created_at: new Date().toISOString(),
-      customer: { name: form.name.value, email: form.email.value, phone: form.phone.value },
-      comment: form.comment.value,
-      items: items,
-      items_count: items.length,
-      total: items.reduce((s, i) => s + i.subtotal, 0),
-      currency: "UAH"
-    };
+      // 1) Позиції → МАСИВ items (саме його розбирає Iterator у Make)
+      const items = [...form.querySelectorAll("[data-price]")]
+        .map((el, i) => [el, i])
+        .filter(([el]) => !(el.type === "checkbox" || el.type === "radio") || el.checked)
+        .map(([el, i]) => {
+          const box = el.closest("label, li, tr, div");
+          const qtyEl = box ? box.querySelector(".qty") : null;
+          const qty = qtyEl ? Math.max(1, Number(qtyEl.value) || 1) : 1;
+          const price = Number(el.dataset.price) || 0;
+          return { sku: el.dataset.sku || "P" + (i + 1), name: el.dataset.name || "Позиція " + (i + 1), qty, price, subtotal: qty * price };
+        });
+      if (!items.length) return say("Оберіть хоча б одну позицію");
 
-    try {
-      const res = await fetch(WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(order)
+      // 2) Усі інші поля форми (ключ = name, id або placeholder поля)
+      const fields = {};
+      form.querySelectorAll("input, textarea, select").forEach(el => {
+        if (el.dataset.price !== undefined || el.classList.contains("qty")) return;
+        if (["submit", "button", "reset", "file", "password", "hidden"].includes(el.type)) return;
+        if ((el.type === "checkbox" || el.type === "radio") && !el.checked) return;
+        fields[el.name || el.id || el.placeholder || el.type] = el.value.trim();
       });
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      msg.textContent = "Дякуємо! Підтвердження надіслано на " + order.customer.email;
-      form.reset();
-    } catch (err) {
-      msg.textContent = "Помилка відправки: " + err.message;
-      console.error(err);
-    }
-  });
+
+      // 3) Шукаємо ім'я / email / телефон / коментар серед полів
+      const pick = (re, type) => {
+        const byType = type && form.querySelector('input[type="' + type + '"]');
+        if (byType && byType.value) return byType.value.trim();
+        const key = Object.keys(fields).find(k => re.test(k));
+        return key ? fields[key] : "";
+      };
+      const firstText = form.querySelector('input[type="text"], input:not([type])');
+      const customer = {
+        name:  pick(/name|ім'?я|имя|піб/i) || (firstText ? firstText.value.trim() : ""),
+        email: pick(/mail|пошт|почт/i, "email"),
+        phone: pick(/phone|tel|телефон/i, "tel")
+      };
+      if (!customer.email) return say("Вкажіть email");
+
+      const order = {
+        order_id: "ORD-" + Date.now().toString().slice(-6),
+        created_at: new Date().toISOString(),
+        customer,
+        comment: pick(/comment|коментар|message|повідомл/i),
+        items,
+        items_count: items.length,
+        total: items.reduce((s, x) => s + x.subtotal, 0),
+        currency: "UAH",
+        fields                                            // усе, що є у формі — про запас
+      };
+
+      try {
+        const res = await fetch(WEBHOOK_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(order)
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        say("Дякуємо! Підтвердження надіслано на " + customer.email, true);
+        form.reset();
+      } catch (err) {
+        console.error("Make:", err);
+        say("Помилка відправки: " + err.message + " (перевірте WEBHOOK_URL)");
+      }
+    }, true);
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
 </script>
+
+
+<!-- ================================================================
+     БЛОК 2. ПОЗИЦІЇ ЗАМОВЛЕННЯ — якщо форма у вас ВЖЕ Є
+     КУДИ: всередину вашої форми, між <form ...> і кнопкою відправки.
+     ЩО ЗМІНИТИ: data-name, data-price і текст — на свої товари /
+     послуги / тарифи. Позицій може бути скільки завгодно.
+     ================================================================ -->
+<fieldset style="border:1px solid #ddd;border-radius:8px;padding:12px;margin:12px 0">
+  <legend>Оберіть позиції</legend>
+  <label style="display:block;margin:6px 0">
+    <input type="checkbox" data-name="Послуга 1" data-price="500"> Послуга 1 — 500 грн
+    · к-сть <input type="number" class="qty" value="1" min="1" style="width:56px">
+  </label>
+  <label style="display:block;margin:6px 0">
+    <input type="checkbox" data-name="Послуга 2" data-price="750"> Послуга 2 — 750 грн
+    · к-сть <input type="number" class="qty" value="1" min="1" style="width:56px">
+  </label>
+  <label style="display:block;margin:6px 0">
+    <input type="checkbox" data-name="Послуга 3" data-price="1200"> Послуга 3 — 1200 грн
+    · к-сть <input type="number" class="qty" value="1" min="1" style="width:56px">
+  </label>
+</fieldset>
+
+
+<!-- ================================================================
+     БЛОК 3. ГОТОВА ФОРМА — якщо форми у вас НЕМАЄ (і для Google Sites)
+     КУДИ: у потрібну секцію сторінки («Ціни», «Замовити», «Контакти»).
+     ЩО ЗМІНИТИ: позиції — як у БЛОЦІ 2.
+     ================================================================ -->
+<form id="orderForm" style="max-width:420px;font-family:Arial,sans-serif">
+  <h3>Оформити замовлення</h3>
+  <label style="display:block;margin:6px 0">
+    <input type="checkbox" data-name="Послуга 1" data-price="500"> Послуга 1 — 500 грн
+    · к-сть <input type="number" class="qty" value="1" min="1" style="width:56px">
+  </label>
+  <label style="display:block;margin:6px 0">
+    <input type="checkbox" data-name="Послуга 2" data-price="750"> Послуга 2 — 750 грн
+    · к-сть <input type="number" class="qty" value="1" min="1" style="width:56px">
+  </label>
+  <label style="display:block;margin:6px 0">
+    <input type="checkbox" data-name="Послуга 3" data-price="1200"> Послуга 3 — 1200 грн
+    · к-сть <input type="number" class="qty" value="1" min="1" style="width:56px">
+  </label>
+  <input name="name" placeholder="Ваше ім'я" required style="display:block;width:100%;margin:6px 0;padding:8px;box-sizing:border-box">
+  <input name="email" type="email" placeholder="Email" required style="display:block;width:100%;margin:6px 0;padding:8px;box-sizing:border-box">
+  <input name="phone" type="tel" placeholder="Телефон" style="display:block;width:100%;margin:6px 0;padding:8px;box-sizing:border-box">
+  <textarea name="comment" placeholder="Коментар" style="display:block;width:100%;margin:6px 0;padding:8px;box-sizing:border-box"></textarea>
+  <button type="submit" style="padding:10px 18px">Замовити</button>
+</form>
